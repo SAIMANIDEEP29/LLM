@@ -3,15 +3,15 @@ import os
 from groq import Groq
 from dotenv import load_dotenv
 
-# Load local .env file (for local development only)
+# Load local .env file (for your local PC)
 load_dotenv()
 
-# FIX: Check Streamlit Secrets first, then environment variables
-# Note: Ensure you save it as "GROQ_API_KEY" in the Streamlit Cloud dashboard
-api_key = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
+# Match the name "Groq" from your .env file
+# This checks Streamlit Secrets first, then your local environment
+api_key = st.secrets.get("Groq") or os.getenv("Groq")
 
 if not api_key:
-    st.error("API Key not found. Please add 'GROQ_API_KEY' to your Streamlit Secrets or .env file.")
+    st.error("API Key not found. Please add 'Groq' to your Streamlit Cloud Secrets!")
     st.stop()
 
 client = Groq(api_key=api_key)
@@ -28,7 +28,7 @@ with st.sidebar:
     st.title("⚙️ Settings")
     model = st.selectbox(
         "Choose Model",
-        ["llama-3.1-8b-instant", "llama3-70b-8192"]
+        ["llama-3.1-8b-instant"]
     )
 
     if st.button("🗑 Clear Chat"):
@@ -43,7 +43,7 @@ with st.sidebar:
 st.title("🤖 AI Chat Assistant")
 st.markdown("Ask anything and get AI responses instantly.")
 
-# Initialize session state
+# Initialize session state for chat history
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
@@ -54,29 +54,34 @@ for msg in st.session_state.chat:
 
 # Chat input
 if prompt := st.chat_input("Type your message..."):
-    # Add user message
+
+    # 1. Add user message to history
     st.session_state.chat.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Assistant response
+    # 2. Assistant response
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         full_response = ""
         
         # Use streaming for a better UI experience
-        completion = client.chat.completions.create(
-            model=model,
-            messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.chat],
-            stream=True
-        )
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.chat],
+                stream=True
+            )
 
-        for chunk in completion:
-            if chunk.choices[0].delta.content:
-                full_response += chunk.choices[0].delta.content
-                response_placeholder.markdown(full_response + "▌")
-        
-        response_placeholder.markdown(full_response)
+            for chunk in completion:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                    response_placeholder.markdown(full_response + "▌")
+            
+            response_placeholder.markdown(full_response)
 
-    # Save assistant reply
-    st.session_state.chat.append({"role": "assistant", "content": full_response})
+            # 3. Save assistant reply to history
+            st.session_state.chat.append({"role": "assistant", "content": full_response})
+            
+        except Exception as e:
+            st.error(f"An error occurred: {e}")
